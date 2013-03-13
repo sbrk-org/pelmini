@@ -1,0 +1,55 @@
+#!/bin/busybox sh
+# s. rannou <mxs@sbrk.org>
+#
+# this is a custom init script that starts a ssh server to give a
+# change to remotely enter the password of encrypted partitions
+
+PATH="/sbin:/bin:/usr/sbin:/usr/bin"
+
+# mount /proc and /sys:
+mount -n proc /proc -t proc
+mount -n sysfs /sys -t sysfs
+mount -n tmpfs /run -t tmpfs -o mode=0755
+
+# pts already in fstab
+rm -rf /dev/ptmx
+mknod /dev/ptmx c 5 2
+chmod 666 /dev/ptmx
+umount /dev/pts
+rm -rf /dev/pts
+mkdir /dev/pts
+mount /dev/pts
+
+# bring up the network
+ifconfig eth0 up
+ifconfig -a eth0 91.121.93.86 netmask 255.255.255.0
+route add default gw 91.121.93.254
+
+/etc/rc.d/rc.sshd start
+
+# wait for the user to enter the passphrase
+mkfifo /run/lukspassword
+LUKSPASSPHRASE=$(cat /run/lukspassword)
+
+echo $LUKSPASSPHRASE | cryptsetup luksOpen /dev/sda2 luksLeft
+echo $LUKSPASSPHRASE | cryptsetup luksOpen /dev/sdb1 luksRight
+
+vgchange -ay
+mount -o ro /dev/mapper/cryptvg-root /mnt
+
+if ! [ -x /mnt/sbin/init ]
+then
+    # give a chance to rescue via ssh
+    sleep 500
+fi
+
+/etc/rc.d/rc.sshd stop
+
+echo 0x0100 > /proc/sys/kernel/real-root-dev
+
+mount -o move /proc /mnt/proc
+mount -o move /sys /mnt/sys
+mount -o move /run /mnt/run
+mount -o move /dev /mnt/dev
+
+exec switch_root /mnt /sbin/init
