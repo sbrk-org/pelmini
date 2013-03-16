@@ -47,6 +47,15 @@ fi
 
 echo 0x0100 > /proc/sys/kernel/real-root-dev
 
+mkdir -p /mnt/dev/pts
+
+# required by tmux, somehow
+rm -rf /mnt/dev/ptmx
+mknod /mnt/dev/ptmx c 5 2
+chmod 666 /mnt/dev/ptmx
+rm -rf /mnt/dev/pts
+mkdir /mnt/dev/pts
+
 mount -o move /proc /mnt/proc
 mount -o move /sys /mnt/sys
 mount -o move /run /mnt/run
